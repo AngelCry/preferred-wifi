@@ -128,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             WifiNetworkSuggestion.Builder()
                 .setSsid(ssid)
                 .setIsAppInteractionRequired(false) // system can use it automatically
-                .setPriority(WifiNetworkSuggestion.RANKING_SCORE_HIGH) // high priority
+                .setPriority(100) // high priority (equivalent to RANKING_SCORE_HIGH)
                 .build()
         }
 
