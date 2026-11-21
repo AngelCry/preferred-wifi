@@ -16,7 +16,7 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Отметьте сети, которые система должна предпочитать. Список берётся из доступных рядом + ранее выбранных."
+        android:text="Отметьте сети, которые система должна предпочитать.\nСписок: сети в радиусе + ранее отмеченные вами.\n(Полный список сохранённых сетей Android 10+ сторонним приложениям не отдаёт)"
         android:textSize="14sp"
         android:paddingBottom="12dp" />
 
