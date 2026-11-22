@@ -65,17 +65,19 @@ class WifiMonitorService : Service() {
                 else -> best.frequency.toString() + " МГц"
             }
             val key = ssid + "|" + best.frequency
+            val currentInfo = wifiManager.connectionInfo
+            val currentSsid = currentInfo?.ssid?.trim('"')
+            val currentFrequency = currentInfo?.frequency ?: 0
+            if (currentSsid == ssid && currentFrequency >= best.frequency) {
+                lastAnnouncedNetwork = key
+                return
+            }
             // If Shizuku becomes available after the network was first seen,
             // allow the next system scan to retry the connection request.
             if (key == lastAnnouncedNetwork && !ShizukuWifiBridge.isConnected()) return
             lastAnnouncedNetwork = key
 
-            val currentInfo = wifiManager.connectionInfo
-            val currentSsid = currentInfo?.ssid?.trim('"')
-            val currentFrequency = currentInfo?.frequency ?: 0
-            val actionResult = if (currentSsid == ssid && currentFrequency >= best.frequency) {
-                "Уже подключено к этой сети"
-            } else if (ShizukuWifiBridge.isConnected()) {
+            val actionResult = if (ShizukuWifiBridge.isConnected()) {
                 ShizukuWifiBridge.connectToSavedNetwork(ssid)
             } else {
                 "Shizuku не подключён: автоматическое переключение недоступно"
