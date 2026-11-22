@@ -65,7 +65,9 @@ class WifiMonitorService : Service() {
                 else -> best.frequency.toString() + " МГц"
             }
             val key = ssid + "|" + best.frequency
-            if (key == lastAnnouncedNetwork) return
+            // If Shizuku becomes available after the network was first seen,
+            // allow the next system scan to retry the connection request.
+            if (key == lastAnnouncedNetwork && !ShizukuWifiBridge.isConnected()) return
             lastAnnouncedNetwork = key
 
             val currentInfo = wifiManager.connectionInfo
