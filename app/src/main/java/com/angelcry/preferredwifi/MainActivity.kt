@@ -77,6 +77,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnShizuku.setOnClickListener { requestShizukuAccess() }
         binding.btnMonitor.setOnClickListener { requestPermissionAndToggleMonitoring() }
 
+        ShizukuWifiBridge.setStateListener { message ->
+            updateShizukuButton()
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
         Shizuku.addBinderReceivedListenerSticky(shizukuBinderListener)
         Shizuku.addBinderDeadListener(shizukuDeadListener)
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
@@ -91,6 +95,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        ShizukuWifiBridge.setStateListener(null)
         Shizuku.removeBinderReceivedListener(shizukuBinderListener)
         Shizuku.removeBinderDeadListener(shizukuDeadListener)
         Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
@@ -163,13 +168,17 @@ class MainActivity : AppCompatActivity() {
             if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
                 ShizukuWifiBridge.bind()
             }
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Не удалось автоматически подключить Shizuku: " +
+                (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun updateShizukuButton() {
         if (!::binding.isInitialized) return
         binding.btnShizuku.text = when {
             ShizukuWifiBridge.isConnected() -> "Shizuku подключён"
+            ShizukuWifiBridge.isBinding() -> "Подключение к Shizuku…"
             !Shizuku.pingBinder() -> "Shizuku не запущен"
             else -> "Подключить Shizuku"
         }
