@@ -53,7 +53,7 @@ class WifiMonitorService : Service() {
         if (preferred.isEmpty()) return
         try {
             val best = wifiManager.scanResults
-                .filter { preferred.contains(it.SSID?.trim('"')) }
+                .filter { it.SSID != null && preferred.contains(it.SSID.trim('"')) }
                 .sortedWith(compareByDescending<android.net.wifi.ScanResult> { it.frequency }
                     .thenByDescending { it.level }).firstOrNull() ?: return
 
