@@ -7,6 +7,7 @@
         <com.google.android.material.button.MaterialButton android:id="@+id/btnRefresh" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Обновить" android:layout_marginEnd="8dp" />
         <com.google.android.material.button.MaterialButton android:id="@+id/btnApply" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Применить" />
     </LinearLayout>
+    <com.google.android.material.button.MaterialButton android:id="@+id/btnShizuku" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Подключить Shizuku" />
     <com.google.android.material.button.MaterialButton android:id="@+id/btnMonitor" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Включить фоновое наблюдение" />
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Без Shizuku приложение пока только обнаруживает предпочитаемые сети и передаёт предпочтения Android. Принудительное переключение будет отдельным режимом." android:textSize="12sp" android:paddingTop="8dp" />
 </LinearLayout>
