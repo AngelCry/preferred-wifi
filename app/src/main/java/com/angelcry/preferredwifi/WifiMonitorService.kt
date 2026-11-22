@@ -68,12 +68,23 @@ class WifiMonitorService : Service() {
             if (key == lastAnnouncedNetwork) return
             lastAnnouncedNetwork = key
 
-            val message = ssid + " обнаружена при системном сканировании (" + band +
-                ", " + best.level + " dBm). Android самостоятельно решает, переключаться ли на неё."
+            val currentInfo = wifiManager.connectionInfo
+            val currentSsid = currentInfo?.ssid?.trim('"')
+            val currentFrequency = currentInfo?.frequency ?: 0
+            val actionResult = if (currentSsid == ssid && currentFrequency >= best.frequency) {
+                "Уже подключено к этой сети"
+            } else if (ShizukuWifiBridge.isConnected()) {
+                ShizukuWifiBridge.connectToSavedNetwork(ssid)
+            } else {
+                "Shizuku не подключён: автоматическое переключение недоступно"
+            }
+            val message = ssid + " (" + band + ", " + best.level + " dBm). " + actionResult
+            val title = if (actionResult.startsWith("OK:"))
+                "Запрошено переключение Wi-Fi" else "Обнаружена предпочитаемая сеть"
             val notification = NotificationCompat.Builder(this, DETECTION_CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_wifi)
-                .setContentTitle("Найдена предпочитаемая сеть")
-                .setContentText(ssid + " · " + band + " · " + best.level + " dBm")
+                .setContentTitle(title)
+                .setContentText(ssid + " · " + band + " · " + actionResult)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                 .setAutoCancel(true).build()
             getSystemService(NotificationManager::class.java).notify(DETECTION_ID, notification)
