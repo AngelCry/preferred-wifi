@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.angelcry.preferredwifi.databinding.ActivityMainBinding
+import rikka.shizuku.Shizuku
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -33,6 +34,23 @@ class MainActivity : AppCompatActivity() {
     ) { granted ->
         if (granted || Build.VERSION.SDK_INT < 33) toggleMonitoring()
         else Toast.makeText(this, "Для фонового наблюдения разреши уведомления", Toast.LENGTH_LONG).show()
+    }
+
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == SHIZUKU_PERMISSION_REQUEST) {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, ShizukuWifiBridge.bind(), Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(this, "Разрешение Shizuku не выдано", Toast.LENGTH_LONG).show()
+            }
+            updateShizukuButton()
+        }
+    }
+    private val shizukuBinderListener = Shizuku.OnBinderReceivedListener {
+        runOnUiThread { updateShizukuButton() }
+    }
+    private val shizukuDeadListener = Shizuku.OnBinderDeadListener {
+        runOnUiThread { updateShizukuButton() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,13 +74,27 @@ class MainActivity : AppCompatActivity() {
             applySuggestions()
             Toast.makeText(this, "Предпочтения переданы Android", Toast.LENGTH_SHORT).show()
         }
+        binding.btnShizuku.setOnClickListener { requestShizukuAccess() }
         binding.btnMonitor.setOnClickListener { requestPermissionAndToggleMonitoring() }
+
+        Shizuku.addBinderReceivedListenerSticky(shizukuBinderListener)
+        Shizuku.addBinderDeadListener(shizukuDeadListener)
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         checkPermissionsAndLoad()
+        tryBindPreviouslyGrantedShizuku()
     }
 
     override fun onResume() {
         super.onResume()
         updateMonitorButton()
+        updateShizukuButton()
+    }
+
+    override fun onDestroy() {
+        Shizuku.removeBinderReceivedListener(shizukuBinderListener)
+        Shizuku.removeBinderDeadListener(shizukuDeadListener)
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
+        super.onDestroy()
     }
 
     private fun checkPermissionsAndLoad() {
@@ -107,6 +139,42 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Не удалось обновить предложения Wi-Fi: " + status, Toast.LENGTH_LONG).show()
     }
 
+    private fun requestShizukuAccess() {
+        if (!Shizuku.pingBinder()) {
+            Toast.makeText(this, "Сначала запусти Shizuku и проверь, что он работает", Toast.LENGTH_LONG).show()
+            updateShizukuButton()
+            return
+        }
+        try {
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, ShizukuWifiBridge.bind(), Toast.LENGTH_LONG).show()
+            } else {
+                Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Ошибка Shizuku: " + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
+        }
+        updateShizukuButton()
+    }
+
+    private fun tryBindPreviouslyGrantedShizuku() {
+        if (!Shizuku.pingBinder()) return
+        try {
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                ShizukuWifiBridge.bind()
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun updateShizukuButton() {
+        if (!::binding.isInitialized) return
+        binding.btnShizuku.text = when {
+            ShizukuWifiBridge.isConnected() -> "Shizuku подключён"
+            !Shizuku.pingBinder() -> "Shizuku не запущен"
+            else -> "Подключить Shizuku"
+        }
+    }
+
     private fun requestPermissionAndToggleMonitoring() {
         if (isMonitoringActive()) {
             toggleMonitoring()
@@ -148,5 +216,9 @@ class MainActivity : AppCompatActivity() {
     private fun updateMonitorButton() {
         if (::binding.isInitialized) binding.btnMonitor.text =
             if (isMonitoringActive()) "Остановить фоновое наблюдение" else "Включить фоновое наблюдение"
+    }
+
+    companion object {
+        private const val SHIZUKU_PERMISSION_REQUEST = 7101
     }
 }
