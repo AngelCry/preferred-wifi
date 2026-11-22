@@ -14,7 +14,14 @@ class WifiUserService @Keep constructor(private val context: Context) : IWifiCon
     override fun connectToSavedNetwork(ssid: String): String {
         if (ssid.isBlank()) return "ERROR: empty SSID"
         return try {
-            val wifi = context.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            // Shizuku's ADB backend runs as UID 2000. Use the shell package
+            // attribution so WifiService sees a package belonging to that UID.
+            val serviceContext = if (Process.myUid() == 2000) {
+                context.createPackageContext("com.android.shell", Context.CONTEXT_RESTRICTED)
+            } else {
+                context
+            }
+            val wifi = serviceContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
             val configuredMethod = wifi.javaClass.getDeclaredMethod("getConfiguredNetworks")
             configuredMethod.isAccessible = true
             val configured = configuredMethod.invoke(wifi) as? List<*>
