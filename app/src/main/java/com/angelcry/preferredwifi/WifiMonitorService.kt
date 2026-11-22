@@ -71,7 +71,7 @@ class WifiMonitorService : Service() {
             val message = ssid + " обнаружена при системном сканировании (" + band +
                 ", " + best.level + " dBm). Android самостоятельно решает, переключаться ли на неё."
             val notification = NotificationCompat.Builder(this, DETECTION_CHANNEL)
-                .setSmallIcon(android.R.drawable.stat_notify_wifi)
+                .setSmallIcon(android.R.drawable.stat_sys_wifi)
                 .setContentTitle("Найдена предпочитаемая сеть")
                 .setContentText(ssid + " · " + band + " · " + best.level + " dBm")
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
@@ -88,7 +88,7 @@ class WifiMonitorService : Service() {
         val pending = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, MONITOR_CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_notify_wifi)
+            .setSmallIcon(android.R.drawable.stat_sys_wifi)
             .setContentTitle("Preferred Wi-Fi: наблюдение включено")
             .setContentText("Ожидание системных результатов сканирования")
             .setContentIntent(pending).setOngoing(true)
