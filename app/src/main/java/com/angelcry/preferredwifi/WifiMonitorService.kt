@@ -86,7 +86,7 @@ class WifiMonitorService : Service() {
             val title = if (actionResult.startsWith("OK:"))
                 "Запрошено переключение Wi-Fi" else "Обнаружена предпочитаемая сеть"
             val notification = NotificationCompat.Builder(this, DETECTION_CHANNEL)
-                .setSmallIcon(android.R.drawable.stat_sys_wifi)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle(title)
                 .setContentText(ssid + " · " + band + " · " + actionResult)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(message))
@@ -103,7 +103,7 @@ class WifiMonitorService : Service() {
         val pending = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(this, MONITOR_CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_sys_wifi)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Preferred Wi-Fi: наблюдение включено")
             .setContentText("Ожидание системных результатов сканирования")
             .setContentIntent(pending).setOngoing(true)
