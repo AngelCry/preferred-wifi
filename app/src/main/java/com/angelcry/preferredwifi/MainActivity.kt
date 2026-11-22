@@ -1,6 +1,7 @@
 package com.angelcry.preferredwifi
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
@@ -15,131 +16,137 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.angelcry.preferredwifi.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
-
     private lateinit var binding: ActivityMainBinding
     private lateinit var wifiManager: WifiManager
     private lateinit var prefs: android.content.SharedPreferences
     private lateinit var adapter: NetworkAdapter
-
     private val preferredSsids = mutableSetOf<String>()
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val granted = permissions.entries.all { it.value }
-        if (granted) {
-            loadNetworks()
-        } else {
-            Toast.makeText(this, "Нужны разрешения для работы с Wi-Fi", Toast.LENGTH_LONG).show()
-        }
+    ) { result ->
+        if (result.values.all { it }) loadNetworks()
+        else Toast.makeText(this, "Нужно разрешение на доступ к Wi-Fi сетям", Toast.LENGTH_LONG).show()
+    }
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted || Build.VERSION.SDK_INT < 33) toggleMonitoring()
+        else Toast.makeText(this, "Для фонового наблюдения разреши уведомления", Toast.LENGTH_LONG).show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        prefs = getSharedPreferences("preferred_wifi", Context.MODE_PRIVATE)
+        prefs = getSharedPreferences(WifiMonitorService.PREFS, Context.MODE_PRIVATE)
+        preferredSsids.addAll(prefs.getStringSet(WifiMonitorService.SSIDS, emptySet()) ?: emptySet())
 
-        // Load previously saved preferred SSIDs
-        preferredSsids.addAll(prefs.getStringSet("ssids", emptySet()) ?: emptySet())
-
-        adapter = NetworkAdapter(preferredSsids) { ssid, isPreferred ->
-            if (isPreferred) {
-                preferredSsids.add(ssid)
-            } else {
-                preferredSsids.remove(ssid)
-            }
-            saveAndApplySuggestions()
+        adapter = NetworkAdapter(preferredSsids) { ssid, checked ->
+            if (checked) preferredSsids.add(ssid) else preferredSsids.remove(ssid)
+            savePreferences()
+            applySuggestions()
         }
-
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
-
-        binding.btnRefresh.setOnClickListener {
-            checkPermissionsAndLoad()
-        }
-
+        binding.btnRefresh.setOnClickListener { checkPermissionsAndLoad() }
         binding.btnApply.setOnClickListener {
-            saveAndApplySuggestions()
-            Toast.makeText(this, "Предпочтения применены системе", Toast.LENGTH_SHORT).show()
+            savePreferences()
+            applySuggestions()
+            Toast.makeText(this, "Предпочтения переданы Android", Toast.LENGTH_SHORT).show()
         }
-
+        binding.btnMonitor.setOnClickListener { requestPermissionAndToggleMonitoring() }
         checkPermissionsAndLoad()
     }
 
-    private fun checkPermissionsAndLoad() {
-        val permissions = mutableListOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
-        }
+    override fun onResume() {
+        super.onResume()
+        updateMonitorButton()
+    }
 
-        val needRequest = permissions.any {
+    private fun checkPermissionsAndLoad() {
+        val required = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= 33) required.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        val missing = required.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-
-        if (needRequest) {
-            requestPermissionLauncher.launch(permissions.toTypedArray())
-        } else {
-            loadNetworks()
-        }
+        if (missing.isNotEmpty()) requestPermissionLauncher.launch(missing.toTypedArray())
+        else loadNetworks()
     }
 
     private fun loadNetworks() {
-        // On Android 10+ we can't freely get all saved networks with passwords.
-        // We show currently available networks + previously preferred ones.
-        val available = mutableListOf<String>()
-
+        val available = linkedSetOf<String>()
         try {
-            val scanResults = wifiManager.scanResults
-            scanResults?.forEach { result ->
-                val ssid = result.SSID?.trim('"') ?: ""
-                if (ssid.isNotBlank() && !available.contains(ssid)) {
-                    available.add(ssid)
-                }
+            wifiManager.scanResults.forEach {
+                val ssid = it.SSID?.trim('"').orEmpty()
+                if (ssid.isNotBlank()) available.add(ssid)
             }
-        } catch (e: SecurityException) {
-            // Permission issue
+        } catch (_: SecurityException) {
+            Toast.makeText(this, "Нет доступа к результатам Wi-Fi сканирования", Toast.LENGTH_LONG).show()
         }
-
-        // Also include previously preferred SSIDs even if not currently visible
-        preferredSsids.forEach { ssid ->
-            if (!available.contains(ssid)) {
-                available.add(ssid)
-            }
-        }
-
-        // Sort: preferred first, then alphabetically
-        available.sortWith(compareByDescending<String> { preferredSsids.contains(it) }.thenBy { it })
-
-        adapter.submitList(available)
+        available.addAll(preferredSsids)
+        adapter.submitList(available.sortedWith(
+            compareByDescending<String> { preferredSsids.contains(it) }.thenBy { it }))
     }
 
-    private fun saveAndApplySuggestions() {
-        // Save to preferences
-        prefs.edit().putStringSet("ssids", preferredSsids).apply()
+    private fun savePreferences() {
+        prefs.edit().putStringSet(WifiMonitorService.SSIDS, preferredSsids.toSet()).apply()
+    }
 
-        // Build suggestions for the system
+    private fun applySuggestions() {
         val suggestions = preferredSsids.map { ssid ->
-            WifiNetworkSuggestion.Builder()
-                .setSsid(ssid)
-                .setIsAppInteractionRequired(false) // system can use it automatically
-                .setPriority(100) // high priority (equivalent to RANKING_SCORE_HIGH)
-                .build()
+            val builder = WifiNetworkSuggestion.Builder().setSsid(ssid)
+                .setIsAppInteractionRequired(false)
+            if (Build.VERSION.SDK_INT >= 30) builder.setPriority(100)
+            builder.build()
         }
+        wifiManager.removeNetworkSuggestions(emptyList())
+        val status = wifiManager.addNetworkSuggestions(suggestions)
+        if (status != WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS)
+            Toast.makeText(this, "Не удалось обновить предложения Wi-Fi: " + status, Toast.LENGTH_LONG).show()
+    }
 
-        // Remove old suggestions from this app and add new ones
-        val status = wifiManager.removeNetworkSuggestions(emptyList()) // clear previous from this app
-        val addStatus = wifiManager.addNetworkSuggestions(suggestions)
-
-        if (addStatus == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS) {
-            // success
-        } else {
-            Toast.makeText(this, "Ошибка при добавлении предложений: $addStatus", Toast.LENGTH_LONG).show()
+    private fun requestPermissionAndToggleMonitoring() {
+        if (isMonitoringActive()) {
+            toggleMonitoring()
+            return
         }
+        if (preferredSsids.isEmpty()) {
+            Toast.makeText(this, "Сначала отметь хотя бы одну предпочитаемую сеть", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        else toggleMonitoring()
+    }
+
+    private fun toggleMonitoring() {
+        try {
+            if (isMonitoringActive()) {
+                WifiMonitorService.stop(this)
+                Toast.makeText(this, "Фоновое наблюдение остановлено", Toast.LENGTH_SHORT).show()
+            } else {
+                WifiMonitorService.start(this)
+                Toast.makeText(this, "Фоновое наблюдение включено", Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Не удалось изменить режим: " + e.message, Toast.LENGTH_LONG).show()
+        }
+        updateMonitorButton()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isMonitoringActive(): Boolean {
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        return manager.getRunningServices(Int.MAX_VALUE).any {
+            it.service.className == WifiMonitorService::class.java.name
+        }
+    }
+
+    private fun updateMonitorButton() {
+        if (::binding.isInitialized) binding.btnMonitor.text =
+            if (isMonitoringActive()) "Остановить фоновое наблюдение" else "Включить фоновое наблюдение"
     }
 }
