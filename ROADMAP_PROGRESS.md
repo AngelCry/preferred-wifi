@@ -13,9 +13,9 @@
 ### Priority 1: Code-Review Fixes (Phase A)
 
 #### A1. removeNetworkSuggestions: track previous SSIDs
-- [ ] Store previously added suggestion SSIDs in SharedPreferences
+- [~] Store previously added suggestion SSIDs in SharedPreferences (will implement in this step)
 - [ ] Build List<WifiNetworkSuggestion> from tracked SSIDs
-- [ ] Pass proper List to removeNetworkSuggestions (not array of strings)
+- [ ] Pass proper List<WifiNetworkSuggestion> to removeNetworkSuggestions (not array of strings)
 - [ ] Update prefs-tracking after adding new suggestions
 - [ ] Verify old suggestions are removed before adding new ones
 

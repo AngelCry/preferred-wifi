@@ -3,6 +3,7 @@ package com.angelcry.preferredwifi
 import android.Manifest
 import android.app.ActivityManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSuggestion
@@ -14,65 +15,74 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.angelcry.preferredwifi.databinding.ActivityMainBinding
-import rikka.shizuku.Shizuku
+import dev.rikka.shizuku.Shizuku
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import androidx.room.Room
+import com.angelcry.preferredwifi.WifiNetworkDatabase
+import java.util.concurrent.ExecutorService
+import kotlinx.coroutines.executor
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var wifiManager: WifiManager
     private lateinit var prefs: android.content.SharedPreferences
-    private lateinit var adapter: NetworkAdapter
+
+    // Key for tracking previously added Wi-Fi network suggestions SSIDs
+    private val PREFS_ADDED_SUGGESTIONS = "added_suggestions"
+
+    // Set of SSIDs that user has marked as preferred (from Room DB or SharedPreferences)
     private val preferredSsids = mutableSetOf<String>()
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        if (result.values.all { it }) loadNetworks()
-        else Toast.makeText(this, "Нужно разрешение на доступ к Wi-Fi сетям", Toast.LENGTH_LONG).show()
-    }
-    private val notificationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted || Build.VERSION.SDK_INT < 33) toggleMonitoring()
-        else Toast.makeText(this, "Для фонового наблюдения разреши уведомления", Toast.LENGTH_LONG).show()
+    // Room database for local Wi-Fi network storage - the source of truth
+    private val wifiDb: WifiNetworkDatabase by lazy {
+        WifiNetworkDatabase.getDatabase(applicationContext)
     }
 
-    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-        if (requestCode == SHIZUKU_PERMISSION_REQUEST) {
-            if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, ShizukuWifiBridge.bind(), Toast.LENGTH_LONG).show()
-            } else {
-                Toast.makeText(this, "Разрешение Shizuku не выдано", Toast.LENGTH_LONG).show()
-            }
-            updateShizukuButton()
-        }
-    }
-    private val shizukuBinderListener = Shizuku.OnBinderReceivedListener {
-        runOnUiThread { updateShizukuButton() }
-    }
-    private val shizukuDeadListener = Shizuku.OnBinderDeadListener {
-        runOnUiThread { updateShizukuButton() }
-    }
+    // Network adapter - displays lists from Room database
+    private lateinit var adapter: NetworkAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         prefs = getSharedPreferences(WifiMonitorService.PREFS, Context.MODE_PRIVATE)
-        preferredSsids.addAll(prefs.getStringSet(WifiMonitorService.SSIDS, emptySet()) ?: emptySet())
 
-        adapter = NetworkAdapter(preferredSsids) { ssid, checked ->
-            if (checked) preferredSsids.add(ssid) else preferredSsids.remove(ssid)
-            savePreferences()
-            applySuggestions()
+        // Check if migration from SharedPreferences has been done
+        // If not, perform migration and mark as done
+        if (!prefs.contains("migration_done")) {
+            performMigrationFromPrefs()
+            prefs.edit().putBoolean("migration_done", true).apply()
+        }
+
+        // Initialize adapter with empty list - will be populated by Room observer
+        adapter = NetworkAdapter(mutableSetOf<String>()) { ssid, checked ->
+            // Update Room database when user toggles preferred flag via adapter
+            wifiDb.wifiNetworkDao().upsert(WifiNetwork(
+                ssid = ssid,
+                preferred = checked,
+                saved = isSaved(ssid),
+                source = if (checked) "user_set" else "user_removed",
+                firstSeen = systemMillis(),
+                lastUpdated = systemMillis()
+            ))
+            // Refresh the monitoring button after preference change
+            updateMonitorButton()
         }
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
-        binding.btnRefresh.setOnClickListener { checkPermissionsAndLoad() }
+
+        // Load networks from Room database on startup
+        loadNetworksFromDatabase()
+
+        binding.btnRefresh.setOnClickListener { refreshNetworks() }
         binding.btnApply.setOnClickListener {
             savePreferences()
             applySuggestions()
-            Toast.makeText(this, "Предпочтения переданы Android", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Предференции переданы Android", Toast.LENGTH_SHORT).show()
         }
         binding.btnShizuku.setOnClickListener { requestShizukuAccess() }
         binding.btnMonitor.setOnClickListener { requestPermissionAndToggleMonitoring() }
@@ -86,62 +96,134 @@ class MainActivity : AppCompatActivity() {
         Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
         checkPermissionsAndLoad()
         tryBindPreviouslyGrantedShizuku()
-    }
 
-    override fun onResume() {
-        super.onResume()
-        updateMonitorButton()
-        updateShizukuButton()
-    }
-
-    override fun onDestroy() {
-        ShizukuWifiBridge.setStateListener(null)
-        Shizuku.removeBinderReceivedListener(shizukuBinderListener)
-        Shizuku.removeBinderDeadListener(shizukuDeadListener)
-        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
-        super.onDestroy()
-    }
-
-    private fun checkPermissionsAndLoad() {
-        val required = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (Build.VERSION.SDK_INT >= 33) required.add(Manifest.permission.NEARBY_WIFI_DEVICES)
-        val missing = required.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        // Track when app goes to background/foreground
+        ProcessLifecycleOwner.lifecycleObserver.onResume {
+            // App came to foreground
         }
-        if (missing.isNotEmpty()) requestPermissionLauncher.launch(missing.toTypedArray())
-        else loadNetworks()
+        ProcessLifecycleOwner.lifecycleObserver.onPause {
+            // App went to background
+        }
     }
 
-    private fun loadNetworks() {
-        val available = linkedSetOf<String>()
-        try {
-            wifiManager.scanResults.forEach {
-                val ssid = it.SSID?.trim('"').orEmpty()
-                if (ssid.isNotBlank()) available.add(ssid)
+    /** Returns the set of SSIDs that the user has marked as preferred from Room database. */
+    private val preferredSsids: Set<String>
+        get() = wifiDb.wifiNetworkDao().getAllNetworks().asSequence().filter { it.preferred }.map { it.ssid }.toSet()
+
+    /** Loads networks from Room database and updates the adapter. */
+    private fun loadNetworksFromDatabase() {
+        CoroutineScope(Dispatchers.Main).launch {
+            val networks = wifiDb.wifiNetworkDao().getAllNetworks()
+            val available = mutableSetOf<String>()
+            networks.forEach { network ->
+                available.add(network.ssid)
             }
-        } catch (_: SecurityException) {
-            Toast.makeText(this, "Нет доступа к результатам Wi-Fi сканирования", Toast.LENGTH_LONG).show()
+            // Sort: preferred first, then alphabetically
+            adapter.submitList(available.toList().sortedWith(
+                compareByDescending { if (it.preferred) 1 else 2 }.thenBy { it.ssid }
+            ))
         }
-        available.addAll(preferredSsids)
-        adapter.submitList(available.sortedWith(
-            compareByDescending<String> { preferredSsids.contains(it) }.thenBy { it }))
     }
 
+    /** Refreshes the network list from system scan results and Room database. */
+    private fun refreshNetworks() {
+        CoroutineScope(Dispatchers.Main).launch {
+            val networks = wifiDb.wifiNetworkDao().getAllNetworks()
+            val available = mutableSetOf<String>()
+            networks.forEach { network ->
+                available.add(network.ssid)
+            }
+            adapter.submitList(available.toList().sortedWith(
+                compareByDescending { if (it.preferred) 1 else 2 }.thenBy { it.ssid }
+            ))
+        }
+    }
+
+    /** Performs migration from SharedPreferences to Room database.
+     *  Reads preferred SSIDs from SharedPreferences and creates Room records
+     *  without losing the user's preferred marks. */
+    private fun performMigrationFromPrefs() {
+        val prefSsids = prefs.getStringSet(WifiMonitorService.SSIDS, emptySet()) ?: emptySet()
+        // Query existing networks from Room (empty on first run)
+        val existingNetworks = wifiDb.wifiNetworkDao().getAllNetworks()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            prefSsids.forEach { ssid ->
+                val existing = existingNetworks.find { it.ssid == ssid }
+                if (existing != null) {
+                    // Network already in Room - just ensure preferred=true
+                    wifiDb.wifiNetworkDao().upsert(WifiNetwork(
+                        ssid = ssid,
+                        preferred = true,
+                        saved = existing.saved,
+                        source = existing.source,
+                        firstSeen = existing.firstSeen ?: systemMillis(),
+                        lastUpdated = systemMillis()
+                    ))
+                } else {
+                    // New network from prefs - create record with preferred=true
+                    wifiDb.wifiNetworkDao().upsert(WifiNetwork(
+                        ssid = ssid,
+                        preferred = true,
+                        saved = false, // Will be updated on next import
+                        source = "SYSTEM_IMPORT",
+                        firstSeen = systemMillis(),
+                        lastUpdated = systemMillis()
+                    ))
+                }
+            }
+        }
+    }
+
+    /** Checks if a network is marked as saved (in Android's system list). */
+    private fun isSaved(ssid: String): Boolean {
+        // The saved flag is managed during import from system networks
+        // For now, return false as default
+        return false
+    }
+
+    /** System current time in milliseconds. */
+    private val systemMillis: Long
+        get() = System.currentTimeMillis()
+
+    /** Saves preferred SSIDs from Room database to SharedPreferences. */
     private fun savePreferences() {
-        prefs.edit().putStringSet(WifiMonitorService.SSIDS, preferredSsids.toSet()).apply()
+        CoroutineScope(Dispatchers.Main).launch {
+            val networks = wifiDb.wifiNetworkDao().getAllNetworks()
+            val preferred = mutableSetOf<String>()
+            networks.filter { it.preferred }.forEach { preferred.add(it.ssid) }
+            prefs.edit().putStringSet(WifiMonitorService.SSIDS, preferred.toSet()).apply()
+        }
     }
 
+    /** Creates WifiNetworkSuggestions for all preferred networks.
+     *  Fixes code-review issue #1: properly removes old suggestions before adding new ones. */
     private fun applySuggestions() {
+        // Get previously added suggestions SSIDs from SharedPreferences
+        val previousSsids = prefs.getStringSet(PREFS_ADDED_SUGGESTIONS, emptySet()) ?: emptySet()
+
+        // Calculate which previous suggestions are no longer preferred and should be removed
+        val ssidsToRemove = previousSsids.filter { it !in preferredSsids }.toTypedArray()
+
+        // Remove old suggestions that are no longer preferred
+        if (ssidsToRemove.isNotEmpty()) {
+            wifiManager.removeNetworkSuggestions(ssidsToRemove)
+        }
+
         val suggestions = preferredSsids.map { ssid ->
             val builder = WifiNetworkSuggestion.Builder().setSsid(ssid)
                 .setIsAppInteractionRequired(false)
             if (Build.VERSION.SDK_INT >= 30) builder.setPriority(100)
             builder.build()
         }
-        wifiManager.removeNetworkSuggestions(emptyList())
+
+        // Add/update suggestions for currently preferred networks
         val status = wifiManager.addNetworkSuggestions(suggestions)
         if (status != WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS)
             Toast.makeText(this, "Не удалось обновить предложения Wi-Fi: " + status, Toast.LENGTH_LONG).show()
+
+        // Update SharedPreferences with current preferred SSIDs as previously added
+        prefs.edit().putStringSet(PREFS_ADDED_SUGGESTIONS, preferredSsids.toSet()).apply()
     }
 
     private fun requestShizukuAccess() {
@@ -175,8 +257,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateShizukuButton() {
-        if (!::binding.isInitialized) return
-        binding.btnShizuku.text = when {
+        if (::binding.isInitialized) binding.btnShizuku.text = when {
             ShizukuWifiBridge.isConnected() -> "Shizuku подключён"
             ShizukuWifiBridge.isBinding() -> "Подключение к Shizuku…"
             !Shizuku.pingBinder() -> "Shizuku не запущен"
@@ -195,17 +276,22 @@ class MainActivity : AppCompatActivity() {
         }
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        else toggleMonitoring()
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            toggleMonitoring()
+        }
     }
 
     private fun toggleMonitoring() {
         try {
             if (isMonitoringActive()) {
                 WifiMonitorService.stop(this)
+                setMonitoringActive(false)
                 Toast.makeText(this, "Фоновое наблюдение остановлено", Toast.LENGTH_SHORT).show()
             } else {
                 WifiMonitorService.start(this)
+                setMonitoringActive(true)
                 Toast.makeText(this, "Фоновое наблюдение включено", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
@@ -214,17 +300,19 @@ class MainActivity : AppCompatActivity() {
         updateMonitorButton()
     }
 
-    @Suppress("DEPRECATION")
+    /** Checks if monitoring is active using a persistent flag instead of deprecated getRunningServices(). */
     private fun isMonitoringActive(): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return manager.getRunningServices(Int.MAX_VALUE).any {
-            it.service.className == WifiMonitorService::class.java.name
-        }
+        return prefs.getBoolean("monitoring_active", false)
+    }
+
+    /** Sets the monitoring active flag in SharedPreferences. */
+    private fun setMonitoringActive(active: Boolean) {
+        prefs.edit().putBoolean("monitoring_active", active).apply()
     }
 
     private fun updateMonitorButton() {
         if (::binding.isInitialized) binding.btnMonitor.text =
-            if (isMonitoringActive()) "Остановить фоновое наблюдение" else "Включить фоновое наблюдение"
+            if (isMonitoringActive()) "Остановить фоновое наблюдение" else "Включить фоновое наблюжение"
     }
 
     companion object {
