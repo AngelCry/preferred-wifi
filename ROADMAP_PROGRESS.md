@@ -38,10 +38,12 @@
 - [ ] HandlerThread started before Handler creation
 
 #### A5. isMonitoringActive uses flag, not deprecated API
-- [ ] Flag monitoring_active set when service starts
-- [ ] Flag cleared in onDestroy
-- [ ] UI reads flag and verifies state in onResume
-- [ ] No deprecated getRunningServices() usage
+- [~] Flag monitoring_active stored in SharedPreferences
+- [~] Flag set when toggling monitoring on/off
+- [~] Flag cleared when toggling monitoring off
+- [~] UI reads flag in onResume via isMonitoringActive()
+- [~] No deprecated getRunningServices() usage
+- [~] Implementation complete, awaiting GitHub CI verification
 
 #### A6. bind() after Shizuku permission grant
 - [ ] Permission result listener registered in onCreate

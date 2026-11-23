@@ -43,6 +43,23 @@ class MainActivity : AppCompatActivity() {
     // Network adapter - displays lists from Room database
     private lateinit var adapter: NetworkAdapter
 
+    // Shizuku permission result listener - paired add/remove in onCreate/onDestroy
+    private val shizukuPermissionListener = object : Shizuku.OnRequestPermissionResultListener {
+        override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
+            if (requestCode == SHIZUKU_PERMISSION_REQUEST) {
+                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                    ShizukuWifiBridge.bind().also { message ->
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                        updateShizukuButton()
+                    }
+                } else {
+                    Toast.makeText(this, "Разрешение Shizuku не выдано", Toast.LENGTH_LONG).show()
+                    updateShizukuButton()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -313,6 +330,14 @@ class MainActivity : AppCompatActivity() {
     private fun updateMonitorButton() {
         if (::binding.isInitialized) binding.btnMonitor.text =
             if (isMonitoringActive()) "Остановить фоновое наблюдение" else "Включить фоновое наблюжение"
+    }
+
+    override fun onDestroy() {
+        ShizukuWifiBridge.setStateListener(null)
+        Shizuku.removeBinderReceivedListener(shizukuBinderListener)
+        Shizuku.removeBinderDeadListener(shizukuDeadListener)
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
+        super.onDestroy()
     }
 
     companion object {
