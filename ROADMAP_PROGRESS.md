@@ -31,7 +31,7 @@
 - [x] Fix `removeNetworkSuggestions(emptyList())` not removing old suggestions - now tracks previous SSIDs in SharedPreferences and passes them to `removeNetworkSuggestions()`
 - [x] Remove `System.exit(0)` from `WifiUserService.destroy()` - lifecycle management now handled by Shizuku UserService
 - [x] Fix `isMonitoringActive()` to not use deprecated `ActivityManager.getRunningServices()` - replace with SharedPreferences flag
-- [ ] Move Binder IPC calls to background thread - `connectToSavedNetwork` in WifiMonitorService should use coroutines
+- [x] Move Binder IPC calls to background thread - `connectToSavedNetwork` in WifiMonitorService now runs on separate HandlerThread
 - [ ] Explicitly call `ShizukuWifiBridge.bind()` after Shizuku permission grant - verify callback automatically invokes bind
 
 ---
