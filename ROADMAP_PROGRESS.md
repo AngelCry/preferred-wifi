@@ -18,16 +18,17 @@
 - [x] Pass proper List<WifiNetworkSuggestion> to removeNetworkSuggestions (not array of strings)
 - [x] Update prefs-tracking after adding new suggestions
 - [x] Verify old suggestions are removed before adding new ones
-- CI: passed local build, awaiting GitHub Actions verification
+- CI: GitHub Actions verified green
 
 #### A2. Remove System.exit(0) from WifiUserService.destroy()
-- [ ] Remove System.exit(0) call
-- [ ] Lifecycle management handled by Shizuku UserService only
+- [x] Remove System.exit(0) call
+- [x] Lifecycle management handled by Shizuku UserService only
+- [x] Fixes code-review issue #2 from section 9
 
 #### A3. Hidden API calls wrapped in runCatching
-- [ ] Verify hidden API calls (getConfiguredNetworks, connect) are wrapped in runCatching
-- [ ] User receives specific error message, not silent failure
-- [ ] If already correct in base branch: mark "verified, no changes needed"
+- [x] Verified: `connectToSavedNetwork` in WifiUserService already uses runCatching
+- [x] User receives specific error via exception handling, not silent failure
+- [x] No changes needed - already correct in base branch
 
 #### A4. Binder IPC off main thread in WifiMonitorService
 - [ ] Create background thread (HandlerThread with start() OR CoroutineScope + Dispatchers.IO)
