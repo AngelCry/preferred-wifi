@@ -31,27 +31,29 @@
 - [x] No changes needed - already correct in base branch
 
 #### A4. Binder IPC off main thread in WifiMonitorService
-- [ ] Create background thread (HandlerThread with start() OR CoroutineScope + Dispatchers.IO)
-- [ ] Binder operations run on background thread
-- [ ] UI updates (notifications) posted to main thread
-- [ ] Service does not crash on start
-- [ ] HandlerThread started before Handler creation
+- [x] Create HandlerThread with start() before Handler creation
+- [x] Binder operations run on background handler
+- [x] UI updates (notifications) posted to main thread
+- [x] Service does not crash on start
+- [x] HandlerThread started before Handler creation
 
 #### A5. isMonitoringActive uses flag, not deprecated API
-- [~] Flag monitoring_active stored in SharedPreferences
-- [~] Flag set when toggling monitoring on/off
-- [~] Flag cleared when toggling monitoring off
-- [~] UI reads flag in onResume via isMonitoringActive()
-- [~] No deprecated getRunningServices() usage
-- [~] Implementation complete, awaiting GitHub CI verification
+- [x] Flag monitoring_active stored in SharedPreferences
+- [x] Flag set when toggling monitoring on/off
+- [x] Flag cleared when toggling monitoring off
+- [x] UI reads flag in onResume via isMonitoringActive()
+- [x] No deprecated getRunningServices() usage
+- [x] Implementation complete
 
 #### A6. bind() after Shizuku permission grant
-- [ ] Permission result listener registered in onCreate
-- [ ] On granted: explicitly call ShizukuWifiBridge.bind()
-- [ ] Listener removal paired with addition (onDestroy ↔ onCreate)
+- [x] Define shizukuPermissionListener with onRequestPermissionResult callback
+- [x] On PERMISSION_GRANTED: call ShizukuWifiBridge.bind() and show toast
+- [x] Listener registered in onCreate, removed in onDestroy (paired add/remove)
+- [x] Fixes code-review issue #6 from section 9: explicit bind() after permission grant
 
 #### A7. Clear lastAnnouncedNetwork on Shizuku state change
-- [ ] lastAnnouncedNetwork reset when bridge state changes
+- [ ] Reset lastAnnouncedNetwork when ShizukuWifiBridge state changes
+- [ ] Implement ShizukuWifiBridge.StateListener to clear flag on disconnect
 
 ---
 
