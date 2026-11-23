@@ -1,0 +1,38 @@
+# Roadmap Progress Tracking
+
+## Current Branch: feature/wifi-database-room
+
+### Priority 1: Room Database Schema and Entity
+- [ ] Design Room Entity `WifiNetwork` with fields: ssid, securityType, preferred, saved, source, firstSeen, lastUpdated, lastSeenInScan, bssids
+- [ ] Design Room DAO with atomic upsert/unique key function
+- [ ] Implement Room Database class
+- [ ] Migrate preferences from SharedPreferences to Room without losing `preferred` marks
+
+### Priority 2: Import System Networks at Startup
+- [ ] Implement import/sync of system's saved networks into local Room database
+- [ ] Handle partial errors safely without corrupting local database
+- [ ] Ensure `saved=false` is not massively set for all networks on import error
+
+### Priority 3: Scan Discovery Integration
+- [ ] Implement background network discovery via Wi-Fi scan broadcasts
+- [ ] Use common upsert mechanism for both import and scan sources
+- [ ] Deduplicate records from both sources
+
+### Priority 4: UI Updates
+- [ ] Observe Flow<List<WifiNetwork>> from Room via DAO
+- [ ] RecyclerView populated from Room database, not from scanResults directly
+- [ ] List item shows: SSID, frequency band (2.4/5/6 GHz), `saved` flag, `preferred` toggle
+
+### Priority 5: WifiNetworkSuggestions
+- [ ] Create `WifiNetworkSuggestion` only for networks marked as `preferred`
+- [ ] Not for every known network
+
+### Priority 6: Remove Old Code/Fix Issues
+- [ ] Remove `System.exit(0)` from `WifiUserService.destroy()`
+- [ ] Fix `isMonitoringActive()` to not use deprecated `ActivityManager.getRunningServices()`
+- [ ] Move Binder IPC calls to background thread
+- [ ] Explicitly call `ShizukuWifiBridge.bind()` after Shizuku permission grant
+
+---
+
+*Last updated: {{timestamp}}*
