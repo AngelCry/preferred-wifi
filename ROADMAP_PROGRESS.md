@@ -3,10 +3,10 @@
 ## Current Branch: feature/wifi-database-room
 
 ### Priority 1: Room Database Schema and Entity
-- [ ] Design Room Entity `WifiNetwork` with fields: ssid, securityType, preferred, saved, source, firstSeen, lastUpdated, lastSeenInScan, bssids
-- [ ] Design Room DAO with atomic upsert/unique key function
-- [ ] Implement Room Database class
-- [ ] Migrate preferences from SharedPreferences to Room without losing `preferred` marks
+- [x] Design Room Entity `WifiNetwork` with fields: ssid (PK), securityType, preferred, saved, source, firstSeen, lastUpdated, lastSeenInScan, bssids
+- [x] Design Room DAO with atomic upsert/unique key function (`ON_CONFLICT_REPLACE`)
+- [x] Implement Room Database class (`WifiNetworkDatabase`) with `@Database` annotation
+- [x] Migrate preferences from SharedPreferences to Room without losing `preferred` marks (performed on first launch, stored in `migration_done` pref)
 
 ### Priority 2: Import System Networks at Startup
 - [ ] Implement import/sync of system's saved networks into local Room database
