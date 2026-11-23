@@ -30,7 +30,7 @@
 ### Priority 6: Remove Old Code/Fix Issues
 - [x] Fix `removeNetworkSuggestions(emptyList())` not removing old suggestions - now tracks previous SSIDs in SharedPreferences and passes them to `removeNetworkSuggestions()`
 - [ ] Remove `System.exit(0)` from `WifiUserService.destroy()` - located in WifiUserService.kt, needs cleanup
-- [ ] Fix `isMonitoringActive()` to not use deprecated `ActivityManager.getRunningServices()` - replace with SharedPreferences flag
+- [x] Fix `isMonitoringActive()` to not use deprecated `ActivityManager.getRunningServices()` - replace with SharedPreferences flag
 - [ ] Move Binder IPC calls to background thread - `connectToSavedNetwork` in WifiMonitorService should use coroutines
 - [ ] Explicitly call `ShizukuWifiBridge.bind()` after Shizuku permission grant - verify callback automatically invokes bind
 
