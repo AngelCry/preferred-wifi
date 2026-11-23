@@ -192,8 +192,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Creates WifiNetworkSuggestions for all preferred networks. */
+    /** Key in SharedPreferences for tracking previously added Wi-Fi network suggestions. */
+    private val PREFS_ADDED_SUGGESTIONS = "added_suggestions"
+
+    /** Creates WifiNetworkSuggestions for all preferred networks.
+     *  Fixes code-review issue #1: properly removes old suggestions before adding new ones. */
     private fun applySuggestions() {
+        // Get previously added suggestions SSIDs from SharedPreferences
+        val previousSsids = prefs.getStringSet(PREFS_ADDED_SUGGESTIONS, emptySet()) ?: emptySet()
+
         val suggestions = preferredSsids.map { ssid ->
             val builder = WifiNetworkSuggestion.Builder().setSsid(ssid)
                 .setIsAppInteractionRequired(false)
@@ -201,11 +208,19 @@ class MainActivity : AppCompatActivity() {
             builder.build()
         }
 
-        // Issue #1 from code-review: removeNetworkSuggestions(emptyList()) doesn't remove old suggestions
-        // Proper implementation should track previous suggestions and pass them here
+        // Remove old suggestions that are no longer preferred
+        val ssidsToRemove = previousSsids.filter { it !in preferredSsids }.toTypedArray()
+        if (ssidsToRemove.isNotEmpty()) {
+            wifiManager.removeNetworkSuggestions(ssidsToRemove)
+        }
+
+        // Add/update suggestions for currently preferred networks
         val status = wifiManager.addNetworkSuggestions(suggestions)
         if (status != WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS)
             Toast.makeText(this, "Не удалось обновить предложения Wi-Fi: " + status, Toast.LENGTH_LONG).show()
+
+        // Update SharedPreferences with current preferred SSIDs as previously added
+        prefs.edit().putStringSet(PREFS_ADDED_SUGGESTIONS, preferredSsids.toSet()).apply()
     }
 
     private fun requestShizukuAccess() {
