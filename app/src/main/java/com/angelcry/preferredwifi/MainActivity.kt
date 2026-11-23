@@ -286,9 +286,11 @@ class MainActivity : AppCompatActivity() {
         try {
             if (isMonitoringActive()) {
                 WifiMonitorService.stop(this)
+                setMonitoringActive(false)
                 Toast.makeText(this, "Фоновое наблюдение остановлено", Toast.LENGTH_SHORT).show()
             } else {
                 WifiMonitorService.start(this)
+                setMonitoringActive(true)
                 Toast.makeText(this, "Фоновое наблюдение включено", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
@@ -297,12 +299,14 @@ class MainActivity : AppCompatActivity() {
         updateMonitorButton()
     }
 
-    @Suppress("DEPRECATION")
+    /** Checks if monitoring is active using a persistent flag instead of deprecated getRunningServices(). */
     private fun isMonitoringActive(): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return manager.getRunningServices(Int.MAX_VALUE).any {
-            it.service.className == WifiMonitorService::class.java.name
-        }
+        return prefs.getBoolean("monitoring_active", false)
+    }
+
+    /** Sets the monitoring active flag in SharedPreferences. */
+    private fun setMonitoringActive(active: Boolean) {
+        prefs.edit().putBoolean("monitoring_active", active).apply()
     }
 
     private fun updateMonitorButton() {
