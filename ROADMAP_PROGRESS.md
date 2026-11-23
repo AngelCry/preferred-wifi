@@ -38,12 +38,12 @@
 
 ---
 
-## Audit History
+## Audit History (recorded for reference)
 - **Original HEAD:** ac629c6 — 6 code-review fixes implemented, CI failure (run 45223670063), 5 cancelled runs
-- **Reset:** Branch reset to origin/feature/shizuku-auto-switch (commit 6848cee)
-- **Current HEAD:** 6848ceea3e7e2ab5103f7a05629cca8efca5d4dc
-- **Audit branch:** audit/wifi-database-room-v2-failed created from ac629c6
-- **Purpose:** Reset to clean base, no Room/kapt/code changes, document state
+- **Reset:** Branch reset to origin/feature/shizuku-auto-switch (commit 6848cee) via `git reset --hard`
+- **Audit branch:** audit/wifi-database-room-v2-failed created from ac629c6 for audit trail
+- **Current HEAD:** 6848ceea3e7e2ab5103f7a05629cca8efca5d4dc (original base)
+- **Phase A status:** NOT STARTED — no code changes applied yet
 
 ---
 
