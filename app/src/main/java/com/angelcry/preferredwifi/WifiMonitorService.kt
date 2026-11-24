@@ -116,7 +116,7 @@ class WifiMonitorService : Service() {
                     val notification = NotificationCompat.Builder(this, DETECTION_CHANNEL)
                         .setSmallIcon(android.R.drawable.ic_dialog_info)
                         .setContentTitle(title)
-                        .setContentText(ssid + " · " + band + " · " + message)
+                        .setContentText(ssid + " · " + band + " · " + actionResult)
                         .setStyle(NotificationCompat.BigTextStyle().bigText(message))
                         .setAutoCancel(true).build()
                     getSystemService(NotificationManager::class.java).notify(DETECTION_ID, notification)
