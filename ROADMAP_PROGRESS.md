@@ -1,6 +1,6 @@
 # Roadmap Progress — feature/wifi-database-room-v2 (CLEAN BASE)
 
-## Current Branch: feature/wifi-database-room-v2 (derived from origin/feature/shizuku-auto-switch, HEAD 737339b, база 6848cee)
+## Current Branch: feature/wifi-database-room-v2 (derived from origin/feature/shizuku-auto-switch, HEAD a81f160, база 6848cee)
 
 ### Legend
 - `[ ]` — not started
@@ -42,7 +42,7 @@
 - **Original HEAD:** ac629c6 — 6 code-review fixes implemented, CI failure (run 45223670063), 5 cancelled runs
 - **Reset:** Branch reset to origin/feature/shizuku-auto-switch (commit 6848cee) via `git reset --hard`
 - **Audit branch:** audit/wifi-database-room-v2-failed created from ac629c6 for audit trail
-- **Current HEAD:** 737339b8400b5c2212dd0bf4b3ae84c33068b376 (A3 applied), база 6848ceea3e7e2ab5103f7a05629cca8efca5d4dc
+- **Current HEAD:** a81f1606340414896a9a4a1a094c5b94451fb1df (A3 applied, A4 notification fix), база 6848ceea3e7e2ab5103f7a05629cca8efca5d4dc
 - **Phase A status:** IN PROGRESS — A1 complete (CI success), A2 complete (CI success), A3 verified (CI success), A4 in progress (CI pending)
 
 ---
