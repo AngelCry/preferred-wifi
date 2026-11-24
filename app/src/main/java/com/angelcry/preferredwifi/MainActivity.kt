@@ -1,7 +1,6 @@
 package com.angelcry.preferredwifi
 
 import android.Manifest
-import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
@@ -239,12 +238,8 @@ class MainActivity : AppCompatActivity() {
         updateMonitorButton()
     }
 
-    @Suppress("DEPRECATION")
     private fun isMonitoringActive(): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return manager.getRunningServices(Int.MAX_VALUE).any {
-            it.service.className == WifiMonitorService::class.java.name
-        }
+        return WifiMonitorService.isRunning()
     }
 
     private fun updateMonitorButton() {

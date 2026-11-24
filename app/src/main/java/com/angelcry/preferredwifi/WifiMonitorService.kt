@@ -64,6 +64,7 @@ class WifiMonitorService : Service() {
         val type = if (Build.VERSION.SDK_INT >= 34)
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
         ServiceCompat.startForeground(this, ONGOING_ID, ongoingNotification(), type)
+        running = true
         return START_STICKY
     }
 
@@ -152,6 +153,7 @@ class WifiMonitorService : Service() {
 
     override fun onDestroy() {
         try { unregisterReceiver(scanReceiver) } catch (_: IllegalArgumentException) { }
+        running = false
         backgroundThread.quitSafely()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
@@ -167,6 +169,9 @@ class WifiMonitorService : Service() {
         private const val DETECTION_CHANNEL = "wifi_detection"
         private const val ONGOING_ID = 4101
         private const val DETECTION_ID = 4102
+
+        @Volatile private var running = false
+        fun isRunning(): Boolean = running
 
         fun start(context: Context) = ContextCompat.startForegroundService(
             context, Intent(context, WifiMonitorService::class.java))
