@@ -54,6 +54,6 @@ class WifiUserService @Keep constructor(private val context: Context) : IWifiCon
 
     @Keep
     fun destroy() {
-        System.exit(0)
+        // Lifecycle management handled by Shizuku UserService; no explicit termination.
     }
 }
