@@ -11,16 +11,27 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 
-/** Passively observes scans initiated by Android or other apps; never polls startScan(). */
+/** Passively observes scans initiated by Android or other apps; never polls startScan().
+ *  Binder IPC (Shizuku connect) is moved off the main thread onto a HandlerThread. */
 class WifiMonitorService : Service() {
     private lateinit var wifiManager: WifiManager
     private var lastAnnouncedNetwork: String? = null
+
+    // Background HandlerThread for Shizuku Binder IPC operations
+    private lateinit var backgroundThread: HandlerThread
+    private lateinit var backgroundHandler: Handler
+
+    // Main thread Handler for showing notifications
+    private lateinit var mainHandler: Handler
 
     private val scanReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -34,6 +45,15 @@ class WifiMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+        // Create HandlerThread for Binder IPC; start() MUST be called before looper/Handler
+        backgroundThread = HandlerThread("wifi-monitor-binder")
+        backgroundThread.start()
+        backgroundHandler = Handler(backgroundThread.looper)
+
+        // Main thread handler for UI/notifications
+        mainHandler = Handler(Looper.getMainLooper())
+
         createNotificationChannels()
         ContextCompat.registerReceiver(this, scanReceiver,
             IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION),
@@ -77,21 +97,31 @@ class WifiMonitorService : Service() {
             if (key == lastAnnouncedNetwork && !ShizukuWifiBridge.isConnected()) return
             lastAnnouncedNetwork = key
 
-            val actionResult = if (ShizukuWifiBridge.isConnected()) {
-                ShizukuWifiBridge.connectToSavedNetwork(ssid)
-            } else {
-                "Shizuku не подключён: автоматическое переключение недоступно"
+            // Binder IPC moved to background HandlerThread
+            backgroundHandler.post {
+                val actionResult = try {
+                    if (ShizukuWifiBridge.isConnected()) {
+                        ShizukuWifiBridge.connectToSavedNetwork(ssid)
+                    } else {
+                        "Shizuku не подключён: автоматическое переключение недоступно"
+                    }
+                } catch (e: Exception) {
+                    "Ошибка связи с Shizuku: ${e.message ?: "binder unavailable"}"
+                }
+                // Post notification back to main thread
+                mainHandler.post {
+                    val message = ssid + " (" + band + ", " + best.level + " dBm). " + actionResult
+                    val title = if (actionResult.startsWith("OK:"))
+                        "Запрошено переключение Wi-Fi" else "Обнаружена предпочитаемая сеть"
+                    val notification = NotificationCompat.Builder(this, DETECTION_CHANNEL)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setContentTitle(title)
+                        .setContentText(ssid + " · " + band + " · " + message)
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                        .setAutoCancel(true).build()
+                    getSystemService(NotificationManager::class.java).notify(DETECTION_ID, notification)
+                }
             }
-            val message = ssid + " (" + band + ", " + best.level + " dBm). " + actionResult
-            val title = if (actionResult.startsWith("OK:"))
-                "Запрошено переключение Wi-Fi" else "Обнаружена предпочитаемая сеть"
-            val notification = NotificationCompat.Builder(this, DETECTION_CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle(title)
-                .setContentText(ssid + " · " + band + " · " + actionResult)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-                .setAutoCancel(true).build()
-            getSystemService(NotificationManager::class.java).notify(DETECTION_ID, notification)
         } catch (e: SecurityException) {
             Log.w(TAG, "Wi-Fi scan results are not accessible", e)
         } catch (e: Exception) {
@@ -122,6 +152,7 @@ class WifiMonitorService : Service() {
 
     override fun onDestroy() {
         try { unregisterReceiver(scanReceiver) } catch (_: IllegalArgumentException) { }
+        backgroundThread.quitSafely()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
