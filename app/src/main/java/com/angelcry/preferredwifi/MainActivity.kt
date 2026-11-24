@@ -17,6 +17,8 @@ import com.angelcry.preferredwifi.databinding.ActivityMainBinding
 import rikka.shizuku.Shizuku
 
 class MainActivity : AppCompatActivity() {
+    private const val PREFS_ADDED_SUGGESTIONS = "added_suggestions"
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var wifiManager: WifiManager
     private lateinit var prefs: android.content.SharedPreferences
@@ -132,16 +134,39 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applySuggestions() {
+        // Build List<WifiNetworkSuggestion> from previous suggestions to remove
+        val previousSuggestions = if (Build.VERSION.SDK_INT >= 30) {
+            // Primary path: get actual suggestions from system
+            wifiManager.getNetworkSuggestions()
+        } else {
+            // Fallback: build from SharedPreferences tracked SSIDs
+            val previousSsids = prefs.getStringSet(PREFS_ADDED_SUGGESTIONS, emptySet()) ?: emptySet()
+            previousSsids.map { ssid ->
+                WifiNetworkSuggestion.Builder().setSsid(ssid)
+                    .setIsAppInteractionRequired(false)
+                    .setPriority(100)
+                    .build()
+            }
+        }
+
+        // Remove old suggestions using proper List<WifiNetworkSuggestion> (not Array<String>)
+        if (previousSuggestions.isNotEmpty()) {
+            wifiManager.removeNetworkSuggestions(previousSuggestions)
+        }
+
         val suggestions = preferredSsids.map { ssid ->
             val builder = WifiNetworkSuggestion.Builder().setSsid(ssid)
                 .setIsAppInteractionRequired(false)
             if (Build.VERSION.SDK_INT >= 30) builder.setPriority(100)
             builder.build()
         }
-        wifiManager.removeNetworkSuggestions(emptyList())
+
         val status = wifiManager.addNetworkSuggestions(suggestions)
         if (status != WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS)
             Toast.makeText(this, "Не удалось обновить предложения Wi-Fi: " + status, Toast.LENGTH_LONG).show()
+
+        // Update SharedPreferences tracking (fallback for API < 30)
+        prefs.edit().putStringSet(PREFS_ADDED_SUGGESTIONS, preferredSsids.toSet()).apply()
     }
 
     private fun requestShizukuAccess() {
