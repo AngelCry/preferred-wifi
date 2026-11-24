@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 class WifiMonitorService : Service() {
     private lateinit var wifiManager: WifiManager
     private var lastAnnouncedNetwork: String? = null
+    private var lastAnnounceWasConnected: Boolean = false
 
     // Background HandlerThread for Shizuku Binder IPC operations
     private lateinit var backgroundThread: HandlerThread
@@ -91,12 +92,19 @@ class WifiMonitorService : Service() {
             val currentFrequency = currentInfo?.frequency ?: 0
             if (currentSsid == ssid && currentFrequency >= best.frequency) {
                 lastAnnouncedNetwork = key
+                lastAnnounceWasConnected = true
                 return
             }
             // If Shizuku becomes available after the network was first seen,
             // allow the next system scan to retry the connection request.
-            if (key == lastAnnouncedNetwork && !ShizukuWifiBridge.isConnected()) return
+            // Suppress only if: already announced AND (was connected before OR still disconnected).
+            // If bridge was disconnected at announcement but is now connected → retry connect.
+            if (key == lastAnnouncedNetwork &&
+                (lastAnnounceWasConnected || !ShizukuWifiBridge.isConnected())) {
+                return
+            }
             lastAnnouncedNetwork = key
+            lastAnnounceWasConnected = ShizukuWifiBridge.isConnected()
 
             // Binder IPC moved to background HandlerThread
             backgroundHandler.post {

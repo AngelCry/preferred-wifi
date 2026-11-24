@@ -16,8 +16,8 @@
 - [x] A3. Hidden API calls wrapped in runCatching — verified, no code changes needed, CI run 45306097276 success, artifact preferred-wifi-debug published (https://github.com/AngelCry/preferred-wifi/actions/runs/45306097276)
 - [x] A4. Binder IPC off main thread in WifiMonitorService — HandlerThread implemented, CI run 45308514256 success, artifact preferred-wifi-debug published (https://github.com/AngelCry/preferred-wifi/actions/runs/45308514256)
 - [x] A5. isMonitoringActive uses flag, not deprecated API — CI run 45309833095 success, artifact preferred-wifi-debug published (https://github.com/AngelCry/preferred-wifi/actions/runs/45309833095)
-- [~] A6. bind() after Shizuku permission grant — CI pending
-- [ ] A7. Clear lastAnnouncedNetwork on Shizuku state change
+- [x] A6. bind() after Shizuku permission grant — CI run 45310561769 success, artifact preferred-wifi-debug published (https://github.com/AngelCry/preferred-wifi/actions/runs/45310561769)
+- [~] A7. lastAnnouncedNetwork retry after Shizuku reconnect — lastAnnounceWasConnected flag added, CI pending
 
 ---
 
@@ -42,8 +42,8 @@
 - **Original HEAD:** ac629c6 — 6 code-review fixes implemented, CI failure (run 45223670063), 5 cancelled runs
 - **Reset:** Branch reset to origin/feature/shizuku-auto-switch (commit 6848cee) via `git reset --hard`
 - **Audit branch:** audit/wifi-database-room-v2-failed created from ac629c6 for audit trail
-- **Current HEAD:** f8e273356de72a108b54ab907d010aece1d55941 (A5 applied), база 6848ceea3e7e2ab5103f7a05629cca8efca5d4dc
-- **Phase A status:** IN PROGRESS — A1–A5 complete (all CI success), A6 verified (CI pending)
+- **Current HEAD:** 4f8ae3b92f0366036c479c546015c67219b40272 (A5 applied), база 6848ceea3e7e2ab5103f7a05629cca8efca5d4dc
+- **Phase A status:** IN PROGRESS — A1–A5 complete (all CI success), A6 verified (CI success), A7 in progress (CI pending)
 
 ---
 
