@@ -17,8 +17,6 @@ import com.angelcry.preferredwifi.databinding.ActivityMainBinding
 import rikka.shizuku.Shizuku
 
 class MainActivity : AppCompatActivity() {
-    private const val PREFS_ADDED_SUGGESTIONS = "added_suggestions"
-
     private lateinit var binding: ActivityMainBinding
     private lateinit var wifiManager: WifiManager
     private lateinit var prefs: android.content.SharedPreferences
@@ -134,24 +132,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applySuggestions() {
-        // Build List<WifiNetworkSuggestion> from previous suggestions to remove
-        val previousSuggestions = if (Build.VERSION.SDK_INT >= 30) {
-            // Primary path: get actual suggestions from system
-            wifiManager.getNetworkSuggestions()
+        // Determine which suggestions are stale (no longer preferred)
+        val staleSuggestions = if (Build.VERSION.SDK_INT >= 30) {
+            // Primary path: get actual suggestions from system, filter to stale only
+            wifiManager.getNetworkSuggestions().filter { suggestion ->
+                val ssid = suggestion.ssid
+                ssid != null && ssid !in preferredSsids
+            }
         } else {
-            // Fallback: build from SharedPreferences tracked SSIDs
+            // Fallback: build from SharedPreferences tracked SSIDs (no setPriority - API 30+)
             val previousSsids = prefs.getStringSet(PREFS_ADDED_SUGGESTIONS, emptySet()) ?: emptySet()
-            previousSsids.map { ssid ->
+            previousSsids.filter { it !in preferredSsids }.map { ssid ->
                 WifiNetworkSuggestion.Builder().setSsid(ssid)
                     .setIsAppInteractionRequired(false)
-                    .setPriority(100)
                     .build()
             }
         }
 
-        // Remove old suggestions using proper List<WifiNetworkSuggestion> (not Array<String>)
-        if (previousSuggestions.isNotEmpty()) {
-            wifiManager.removeNetworkSuggestions(previousSuggestions)
+        // Remove only stale suggestions using proper List<WifiNetworkSuggestion> (not Array<String>)
+        if (staleSuggestions.isNotEmpty()) {
+            wifiManager.removeNetworkSuggestions(staleSuggestions)
         }
 
         val suggestions = preferredSsids.map { ssid ->
@@ -254,5 +254,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val SHIZUKU_PERMISSION_REQUEST = 7101
+        private const val PREFS_ADDED_SUGGESTIONS = "added_suggestions"
     }
 }
